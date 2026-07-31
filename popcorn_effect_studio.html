@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Popcorn Motion Graphics Studio</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Matter.js 2D Physics Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts for Bold Arabic and Display Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@700;900&family=Anton&family=Cairo:wght@700;900&family=Inter:wght@400;600;800;900&family=Montserrat:wght@700;900&family=Outfit:wght@700;900&family=Poppins:wght@700;900&family=Tajawal:wght@700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d0f12;
+            color: #f3f4f6;
+            overflow: hidden;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #14171d;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2b313d;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3b4252;
+        }
+
+        /* Glassmorphism Sidebar */
+        .glass-panel {
+            background: rgba(20, 23, 29, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .tab-btn.active {
+            background-color: #2563eb;
+            color: #ffffff;
+            border-color: #3b82f6;
+        }
+
+        /* Canvas Wrapper & Scaling */
+        #canvas-wrapper {
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            transition: width 0.15s ease, height 0.15s ease;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        #sim-canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+            object-fit: contain;
+        }
+
+        /* Recording Pulse Effect */
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+        .recording-pulse {
+            animation: pulse-red 1.5s infinite;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col select-none">
+
+    <header class="h-14 border-b border-gray-800 glass-panel px-4 flex items-center justify-between z-20 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-yellow-400 via-pink-500 to-indigo-600 flex items-center justify-center font-black text-white text-lg shadow-lg">
+                🍿
+            </div>
+            <div>
+                <h1 class="text-sm font-bold tracking-wide text-white flex items-center gap-2">
+                    Popcorn Motion Studio <span class="text-[10px] bg-blue-600/30 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded uppercase font-semibold">Physics 2D</span>
+                </h1>
+                
+            </div>
+        </div>
+
+        <!-- Quick Physics / Playback Stats -->
+        <div class="flex items-center space-x-2 sm:space-x-4">
+            <div class="hidden md:flex items-center space-x-3 text-xs text-gray-400 bg-gray-900/60 px-3 py-1.5 rounded-lg border border-gray-800">
+                <span>Layers: <strong id="stat-layer-count" class="text-yellow-400 font-mono">0</strong></span>
+                <span class="text-gray-700">|</span>
+                <span>FPS: <strong id="stat-fps" class="text-green-400 font-mono">60</strong></span>
+            </div>
+
+            <!-- Header Action Buttons -->
+            <button id="btn-burst" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-semibold text-xs px-3 py-1.5 rounded-lg shadow flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-bolt"></i> Burst Popcorn
+            </button>
+
+            <button id="btn-play-pause" class="bg-gray-800 hover:bg-gray-700 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-pause" id="icon-play-pause"></i> <span id="label-play-pause">Pause</span>
+            </button>
+
+            <button id="btn-reset" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded-lg border border-gray-700 flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-rotate-left"></i> Reset
+            </button>
+
+            <button id="btn-record" class="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition shadow">
+                <i class="fa-solid fa-circle text-[10px]" id="icon-record"></i> <span id="label-record">Record Video</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <aside class="w-80 sm:w-96 glass-panel border-r border-gray-800 flex flex-col z-10 shrink-0">
+            <!-- Navigation Tabs -->
+            <div class="grid grid-cols-4 p-1.5 bg-gray-950/60 border-b border-gray-800 gap-1 text-xs">
+                <button class="tab-btn active py-2 rounded-md font-medium text-center border border-transparent transition" data-tab="tab-text">
+                    <i class="fa-solid fa-font block mb-0.5 text-sm"></i> Text
+                </button>
+                <button class="tab-btn py-2 rounded-md font-medium text-center text-gray-400 border border-transparent transition" data-tab="tab-comp">
+                    <i class="fa-solid fa-expand block mb-0.5 text-sm"></i> Comp
+                </button>
+                <button class="tab-btn py-2 rounded-md font-medium text-center text-gray-400 border border-transparent transition" data-tab="tab-physics">
+                    <i class="fa-solid fa-atom block mb-0.5 text-sm"></i> Physics
+                </button>
+                <button class="tab-btn py-2 rounded-md font-medium text-center text-gray-400 border border-transparent transition" data-tab="tab-style">
+                    <i class="fa-solid fa-palette block mb-0.5 text-sm"></i> Colors
+                </button>
+            </div>
+
+            <!-- Tab Contents Container -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-5 text-xs">
+
+                <!-- TAB 1: TEXT & CONTENT -->
+                <div id="tab-text" class="tab-content space-y-4">
+                    <div>
+                        <label class="block font-semibold mb-1 text-gray-200">Text Content (Space Separated)</label>
+                        <textarea id="input-text-list" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-blue-500 font-mono text-xs" placeholder="كل ما انت بتعمل المطلوب منك الآن"></textarea>
+                        <p class="text-[10px] text-gray-400 mt-1">Words are used in sequential or random order.</p>
+                    </div>
+
+                    <div class="bg-gray-900/70 border border-gray-800 rounded-lg p-3 space-y-2">
+                        <label class="block font-semibold text-gray-200">Subtitle Source (.srt)</label>
+                        <div class="flex items-center gap-2">
+                            <input id="input-srt-file" type="file" accept=".srt,text/plain" class="flex-1 text-[11px] text-gray-300 file:mr-2 file:rounded file:border-0 file:bg-blue-600 file:px-2 file:py-1 file:text-white file:cursor-pointer cursor-pointer">
+                            <button id="btn-clear-srt" class="hidden bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded px-2 py-1 text-[11px]">Clear</button>
+                        </div>
+                        <p id="label-srt-status" class="text-[10px] text-gray-400">Manual words mode is active.</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-semibold mb-1 text-gray-200">Sequence Order</label>
+                            <select id="select-word-order" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-white">
+                                <option value="sequential" selected>In Order (Sequential)</option>
+                                <option value="random">Random Pickup</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-semibold mb-1 text-gray-200">Font Family</label>
+                            <select id="select-font" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-white focus:outline-none focus:border-blue-500">
+                                <option value="Cairo" selected>Cairo / Qatar 2022 (Arabic Bold)</option>
+                                <option value="Tajawal">Tajawal (Arabic Clean)</option>
+                                <option value="Alexandria">Alexandria (Arabic Display)</option>
+                                <option value="Montserrat">Montserrat (Bold Modern)</option>
+                                <option value="Inter">Inter (Sans-Serif Clean)</option>
+                                <option value="Outfit">Outfit (Rounded Modern)</option>
+                                <option value="Anton">Anton (Impact Heavy)</option>
+                                <option value="Poppins">Poppins (Geometric)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-semibold mb-1 text-gray-200">Text Transform</label>
+                            <select id="select-text-case" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-white">
+                                <option value="uppercase" selected>UPPERCASE</option>
+                                <option value="lowercase">lowercase</option>
+                                <option value="original">Original</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="font-semibold text-gray-200">Font Scale</label>
+                                <input id="num-font-scale" type="number" step="0.01" value="0.70" class="w-16 bg-gray-900 border border-gray-700 rounded px-1 py-0.5 text-right font-mono text-white text-xs focus:outline-none focus:border-blue-500">
+                            </div>
+                            <input id="slider-font-scale" type="range" min="0.2" max="1.5" step="0.01" value="0.7" class="w-full">
+                        </div>
+                    </div>
+
+                    <hr class="border-gray-800">
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="font-semibold text-gray-200">Pill Width (px)</label>
+                            <input id="num-pill-w" type="number" value="220" class="w-20 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-right font-mono text-white text-xs focus:outline-none focus:border-blue-500">
+                        </div>
+                        <input id="slider-pill-w" type="range" min="50" max="800" step="5" value="220" class="w-full">
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="font-semibold text-gray-200">Pill Height (px)</label>
+                            <input id="num-pill-h" type="number" value="80" class="w-20 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-right font-mono text-white text-xs focus:outline-none focus:border-blue-500">
+                        </div>
+                        <input id="slider-pill-h" type="range" min="20" max="300" step="2" value="80" class="w-full">
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="font-semibold text-gray-200">Corner Radius (px)</label>
+                            <input id="num-pill-radius" type="number" value="40" class="w-20 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-right font-mono text-white text-xs focus:outline-none focus:border-blue-500">
+                        </div>
+                        <input id="slider-pill-radius" type="range" min="0" max="150" step="1" value="40" class="w-full">
+                    </div>
+                </div>
+
+                <!-- TAB 2: COMPOSITION & BOUNDS -->
+                <div id="tab-comp" class="tab-content hidden space-y-4">
+                    <div>
+                        <label class="block font-semibold mb-1 text-gray-200">Aspect Ratio Presets</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button class="btn-preset-ratio bg-gray-800 hover:bg-gray-700 border border-gray-700 p-2 rounded text-center" data-w="1080" data-h="1920">
+                                <div class="font-bold text-white">9:16 Vertical</div>
+                                <div class="text-[10px] text-gray-400">1080 x 1920 (Reels/TikTok)</div>
+                            </button>
+                            <button class="btn-preset-ratio bg-gray-800 hover:bg-gray-700 border border-gray-700 p-2 rounded text-center" data-w="1080" data-h="1080">
+                                <div class="font-bold text-white">1:1 Square</div>
+                                <div class="text-[10px] text-gray-400">1080 x 1080 (Post)</div>
+                            </button>
+                            <button class="btn-preset-ratio bg-gray-800 hover:bg-gray-700 border border-gray-700 p-2 rounded text-center" data-w="1920" data-h="1080">
+                                <div class="font-bold text-white">16:9 Landscape</div>
+                                <div class="text-[10px] text-gray-400">1920 x 1080 (HD Video)</div>
+                            </button>
+                            <button class="btn-preset-ratio bg-gray-800 hover:bg-gray-700 border border-gray-700 p-2 rounded text-center" data-w="1080" data-h="1350">
+                                <div class="font-bold text-white">4:5 Portrait</div>
+                                <div class="text-[10px] text-gray-400">1080 x 1350 (IG Feed)</div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-semibold mb-1 text-gray-200">Width (px)</label>
+                            <input id="input-comp-w" type="number" min="400" max="3840" value="1080" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-white font-mono">
+                        </div>
+                        <div>
+                            <label class="block font-semibold mb-1 text-gray-200">Height (px)</label>
+                            <input id="input-comp-h" type="number" min="400" max="3840" value="1920" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-white font-mono">
+                        </div>
+                    </div>
+
+                    <hr class="border-gray-800">
+
+                    <div>
+                        <label class="block font-semibold mb-1 text-gray-200">Background Color</label>
+                        <div class="flex items-center gap-2">
+                            <input id="picker-bg-color" type="color" value="#000000" class="w-10 h-10 rounded cursor-pointer bg-transparent border border-gray-700">
+                            <input id="text-bg-color" type="text" value="#000000" class="flex-1 bg-gray-900 border border-gray-700 rounded-lg p-2 text-white font-mono uppercase">
+                        </div>
+                    </div>
+
+                    <div class="space-y-2 pt-2">
+                        <label class="block font-semibold text-gray-200">Boundary Walls</label>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <label class="flex items-center gap-2 bg-gray-900 p-2 rounded border border-gray-800 cursor-pointer">
+                                <input id="chk-wall-bottom" type="checkbox" checked class="rounded text-blue-600"> Bottom Wall
+                            </label>
+                            <label class="flex items-center gap-2 bg-gray-900 p-2 rounded border border-gray-800 cursor-pointer">
+                                <input id="chk-wall-top" type="checkbox" checked class="rounded text-blue-600"> Top Wall
+                            </label>
+                            <label class="flex items-center gap-2 bg-gray-900 p-2 rounded border border-gray-800 cursor-pointer">
+                                <input id="chk-wall-left" type="checkbox" checked class="rounded text-blue-600"> Left Wall
+                            </label>
+                            <label class="flex items-center gap-2 bg-gray-900 p-2 rounded border border-gray-800 cursor-pointer">
+                                <input id="chk-wall-right" type="checkbox" checked class="rounded text-blue-600"> Right Wall
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: PHYSICS & SPAWNING -->
+                <div id="tab-physics" class="tab-content hidden space-y-4">
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="font-semibold text-gray-200">Target Layer Count</label>
+                            <input id="num-max-count" type="number" value="80" class="w-20 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-right font-mono text-white text-xs focus:outline-none focus:border-blue-500">
+                        </div>
+                        <input id="slider-max-count" type="range" min="1" max="500" step="1" value="80" class="w-full">
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold mb-1 text-gray-200">Spawning Mode</label>
+                        <select id="select-spawn-mode" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-white">
+                            <option value="popcorn" selected>Popcorn Expand & Burst (Newton Style)</option>
+                            <option value="stagger-top">Stagger Rain (From Top)</option>
+                            <option value="center-burst">Center Explosion</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="font-semibold text-gray-200">Spawn Delay / Stagger (ms)</label>
+                            <input id="num-spawn-rate" type="number" value="40" class="w-20 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-right font-mono text-white text-xs focus:outline-none focus:border-blue-500">
+                        </div>
+                        <input id="slider-spawn-rate" type="range" min="5" max="500" step="5" value="40" class="w-full">
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="font-semibold text-gray-200">Initial Scale-Up Speed</label>
+                            <input id="num-scale-speed" type="number" step="0.01" value="0.12" class="w-20 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-right font-mono text-white text-xs focus:outline-none focus:border-blue-500">
+                        </div>
+                        <input id="slider-scale-speed" type="range" min="0.01" max="0.50" step="0.01" value="0.12" class="w-full">
+                    </div>
+
+                    <hr class="border-gray-800">
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="font-semibold text-gray-200">Vertical Gravity Y</label>
+                            <input id="num-gravity-y" type="number" step="0.05" value="0.00" class="w-20 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-right font-mono text-white text-xs focus:outline-none focus:border-blue-500">
+                        </div>
+                        <input id="slider-gravity-y" type="range" min="-2.0" max="5.0" step="0.05" value="0.00" class="w-full">
+                        <p class="text-[10px] text-gray-400 mt-1">Set to 0.00 for AE Newton zero-gravity floating style.</p>
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="font-semibold text-gray-200">Restitution / Bounce</label>
+                            <input id="num-bounce" type="number" step="0.05" value="0.30" class="w-20 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-right font-mono text-white text-xs focus:outline-none focus:border-blue-500">
+                        </div>
+                        <input id="slider-bounce" type="range" min="0.0" max="1.5" step="0.05" value="0.30" class="w-full">
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="font-semibold text-gray-200">Friction</label>
+                            <input id="num-friction" type="number" step="0.05" value="0.80" class="w-20 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-right font-mono text-white text-xs focus:outline-none focus:border-blue-500">
+                        </div>
+                        <input id="slider-friction" type="range" min="0.0" max="2.0" step="0.05" value="0.80" class="w-full">
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="font-semibold text-gray-200">Random Angular Variation (°)</label>
+                            <input id="num-rotation-range" type="number" value="60" class="w-20 bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-right font-mono text-white text-xs focus:outline-none focus:border-blue-500">
+                        </div>
+                        <input id="slider-rotation-range" type="range" min="0" max="360" step="5" value="60" class="w-full">
+                    </div>
+                </div>
+
+                <!-- TAB 4: COLORS & STYLING -->
+                <div id="tab-style" class="tab-content hidden space-y-4">
+                    <div>
+                        <label class="block font-semibold mb-1 text-gray-200">Color Palette Presets</label>
+                        <div class="space-y-2">
+                            <button class="btn-palette w-full p-2 bg-gray-900 border border-gray-700 hover:border-blue-500 rounded flex items-center justify-between" data-palette="qatar">
+                                <span class="font-medium text-white text-xs">Qatar Reference</span>
+                                <div class="flex h-4 w-28 rounded overflow-hidden">
+                                    <span class="w-1/9 h-full bg-[#E58B37]"></span>
+                                    <span class="w-1/9 h-full bg-[#469FB2]"></span>
+                                    <span class="w-1/9 h-full bg-[#E8C4A0]"></span>
+                                    <span class="w-1/9 h-full bg-[#53727B]"></span>
+                                    <span class="w-1/9 h-full bg-[#CFE2E6]"></span>
+                                    <span class="w-1/9 h-full bg-[#D69E6A]"></span>
+                                    <span class="w-1/9 h-full bg-[#74B7C5]"></span>
+                                    <span class="w-1/9 h-full bg-[#F2F4F4]"></span>
+                                    <span class="w-1/9 h-full bg-[#EE8A26]"></span>
+                                </div>
+                            </button>
+
+                            <button class="btn-palette w-full p-2 bg-gray-900 border border-gray-800 hover:border-gray-600 rounded flex items-center justify-between" data-palette="pop">
+                                <span class="font-medium text-white text-xs">Vibrant Pop (AE Reference)</span>
+                                <div class="flex h-4 w-24 rounded overflow-hidden">
+                                    <span class="w-1/5 h-full bg-[#FF2A6D]"></span>
+                                    <span class="w-1/5 h-full bg-[#FFB800]"></span>
+                                    <span class="w-1/5 h-full bg-[#05D5E8]"></span>
+                                    <span class="w-1/5 h-full bg-[#00F5D4]"></span>
+                                    <span class="w-1/5 h-full bg-[#7B2CBF]"></span>
+                                </div>
+                            </button>
+
+                            <button class="btn-palette w-full p-2 bg-gray-900 border border-gray-800 hover:border-gray-600 rounded flex items-center justify-between" data-palette="neon">
+                                <span class="font-medium text-white text-xs">Cyber Neon</span>
+                                <div class="flex h-4 w-24 rounded overflow-hidden">
+                                    <span class="w-1/5 h-full bg-[#39FF14]"></span>
+                                    <span class="w-1/5 h-full bg-[#FF007F]"></span>
+                                    <span class="w-1/5 h-full bg-[#00E5FF]"></span>
+                                    <span class="w-1/5 h-full bg-[#FFE600]"></span>
+                                    <span class="w-1/5 h-full bg-[#B500FF]"></span>
+                                </div>
+                            </button>
+
+                            <button class="btn-palette w-full p-2 bg-gray-900 border border-gray-800 hover:border-gray-600 rounded flex items-center justify-between" data-palette="sunset">
+                                <span class="font-medium text-white text-xs">Warm Sunset</span>
+                                <div class="flex h-4 w-24 rounded overflow-hidden">
+                                    <span class="w-1/5 h-full bg-[#F94144]"></span>
+                                    <span class="w-1/5 h-full bg-[#F3722C]"></span>
+                                    <span class="w-1/5 h-full bg-[#F8961E]"></span>
+                                    <span class="w-1/5 h-full bg-[#F9C74F]"></span>
+                                    <span class="w-1/5 h-full bg-[#90BE6D]"></span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <hr class="border-gray-800">
+
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between bg-gray-900 p-3 rounded-lg border border-gray-800">
+                            <div>
+                                <label class="block font-semibold text-gray-200 text-xs">Pill Drop Shadows</label>
+                                <p class="text-[10px] text-gray-400">Toggle elevation shadows behind pills</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input id="chk-shadow" type="checkbox" checked class="sr-only peer">
+                                <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="flex items-center justify-between bg-gray-900 p-3 rounded-lg border border-gray-800">
+                            <div>
+                                <label class="block font-semibold text-gray-200 text-xs">Auto Text Contrast</label>
+                                <p class="text-[10px] text-gray-400">Smart dark/light text based on pill color</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input id="chk-auto-contrast" type="checkbox" checked class="sr-only peer">
+                                <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold mb-1 text-gray-200">Fixed Text Color (When Auto-Contrast Disabled)</label>
+                        <div class="flex items-center gap-2">
+                            <input id="picker-text-color" type="color" value="#FFFFFF" class="w-10 h-10 rounded cursor-pointer bg-transparent border border-gray-700">
+                            <input id="text-text-color" type="text" value="#FFFFFF" class="flex-1 bg-gray-900 border border-gray-700 rounded-lg p-2 text-white font-mono uppercase">
+                        </div>
+                    </div>
+
+                    <div>
+                        <button id="btn-export-png" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-semibold py-2.5 rounded-lg border border-gray-700 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-camera"></i> Snapshot PNG Frame
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+
+        <main id="viewport-container" class="flex-1 bg-gray-950 p-4 sm:p-6 flex flex-col items-center justify-center overflow-hidden relative">
+            
+            <!-- Canvas Container Wrapper -->
+            <div id="canvas-wrapper" class="relative rounded-xl overflow-hidden border border-gray-800 flex items-center justify-center bg-black">
+                <canvas id="sim-canvas"></canvas>
+            </div>
+
+            <!-- Viewport Scale Footer Indicator -->
+            <div class="mt-3 text-[11px] text-gray-500 font-mono flex items-center gap-3">
+                <span id="label-resolution">1080 x 1920 PX</span>
+                <span>•</span>
+                <span id="label-zoom">Scale: 100%</span>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        /* Global Application State */
+        const state = {
+            // Comp settings
+            compW: 1080,
+            compH: 1920,
+            bgColor: '#000000',
+            textColor: '#FFFFFF',
+            autoContrast: true,
+            shadows: true,
+            
+            // Text list & ordering
+            words: ['كل', 'ما', 'انت', 'بتعمل', 'المطلوب', 'منك', 'الآن'],
+            wordOrder: 'sequential', // 'sequential' or 'random'
+            wordIndex: 0,
+            fontFamily: 'Cairo',
+            textCase: 'original',
+            fontScale: 0.7,
+            textSource: 'manual', // 'manual' or 'srt'
+            srtCues: [],
+            srtCueIndex: 0,
+            srtPlaybackMs: 0,
+
+            // Pill dimensions
+            pillW: 220,
+            pillH: 80,
+            pillRadius: 40,
+
+            // Physics settings
+            maxCount: 80,
+            spawnMode: 'popcorn',
+            spawnRateMs: 40,
+            scaleSpeed: 0.12,
+            gravityY: 0.00,
+            bounce: 0.30,
+            friction: 0.80,
+            rotationRangeDeg: 60,
+
+            // Boundaries
+            walls: { bottom: true, top: true, left: true, right: true },
+
+            // Active Color Palette - Defaulted to Qatar Brand Palette
+            palette: ['#E58B37', '#469FB2', '#E8C4A0', '#53727B', '#CFE2E6', '#D69E6A', '#74B7C5', '#F2F4F4', '#EE8A26'],
+
+            // Playback
+            isPaused: false,
+            isRecording: false
+        };
+
+        // Color Palettes Dictionary
+        const PALETTES = {
+            qatar: ['#E58B37', '#469FB2', '#E8C4A0', '#53727B', '#CFE2E6', '#D69E6A', '#74B7C5', '#F2F4F4', '#EE8A26'],
+            pop: ['#FF2A6D', '#FFB800', '#05D5E8', '#00F5D4', '#7B2CBF'],
+            neon: ['#39FF14', '#FF007F', '#00E5FF', '#FFE600', '#B500FF'],
+            sunset: ['#F94144', '#F3722C', '#F8961E', '#F9C74F', '#90BE6D']
+        };
+
+        // Physics Global References
+        let engine = null;
+        let world = null;
+        let pBodies = [];
+        let wallBodies = {};
+        let mouseConstraint = null;
+        let spawnTimer = null;
+        let lastFrameTime = performance.now();
+        let fpsCounter = 60;
+        let recordedChunks = [];
+        let mediaRecorder = null;
+        let canvas = null;
+        let ctx = null;
+        let srtBurstTimers = [];
+
+        // Check if text is Arabic
+        function isArabicText(text) {
+            const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+            return arabicPattern.test(text);
+        }
+
+        // Smart Contrast Helper
+        function getSmartTextColor(hexColor) {
+            if (!state.autoContrast) return state.textColor;
+            let color = hexColor.replace('#', '');
+            if (color.length === 3) {
+                color = color.split('').map(c => c + c).join('');
+            }
+            const r = parseInt(color.substr(0, 2), 16);
+            const g = parseInt(color.substr(2, 2), 16);
+            const b = parseInt(color.substr(4, 2), 16);
+            const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+            return luminance > 0.55 ? '#1A202C' : '#FFFFFF';
+        }
+
+        // Word Selection Sequence
+        function getNextWord() {
+            if (!state.words.length) return 'POP';
+            
+            let word;
+            if (state.wordOrder === 'sequential') {
+                word = state.words[state.wordIndex % state.words.length];
+                state.wordIndex++;
+            } else {
+                word = state.words[Math.floor(Math.random() * state.words.length)];
+            }
+            
+            if (!isArabicText(word)) {
+                if (state.textCase === 'uppercase') return word.toUpperCase();
+                if (state.textCase === 'lowercase') return word.toLowerCase();
+            }
+            return word;
+        }
+
+        function getRandomColor() {
+            return state.palette[Math.floor(Math.random() * state.palette.length)];
+        }
+
+        function formatDisplayText(text) {
+            const value = String(text || '').trim();
+            if (!value) return 'POP';
+            if (!isArabicText(value)) {
+                if (state.textCase === 'uppercase') return value.toUpperCase();
+                if (state.textCase === 'lowercase') return value.toLowerCase();
+            }
+            return value;
+        }
+
+        function parseWords(inputText) {
+            return inputText.split(/\s+/).map(s => s.trim()).filter(Boolean);
+        }
+
+        function parseSrtTimeToMs(timeValue) {
+            const match = String(timeValue).trim().match(/^(\d{2}):(\d{2}):(\d{2})[,.](\d{1,3})$/);
+            if (!match) return NaN;
+
+            const hh = parseInt(match[1], 10);
+            const mm = parseInt(match[2], 10);
+            const ss = parseInt(match[3], 10);
+            const ms = parseInt(match[4].padEnd(3, '0').slice(0, 3), 10);
+            return (((hh * 60 + mm) * 60) + ss) * 1000 + ms;
+        }
+
+        function parseSrtCues(srtText) {
+            const blocks = srtText.replace(/\r/g, '').split(/\n\s*\n+/);
+            const cues = [];
+
+            blocks.forEach(block => {
+                const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
+                if (!lines.length) return;
+
+                const timeLineIndex = lines.findIndex(line => line.includes('-->'));
+                if (timeLineIndex === -1) return;
+
+                const timeLine = lines[timeLineIndex];
+                const parts = timeLine.split('-->').map(part => part.trim());
+                if (parts.length !== 2) return;
+
+                const startMs = parseSrtTimeToMs(parts[0]);
+                const endMs = parseSrtTimeToMs(parts[1]);
+                if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return;
+
+                const textLines = lines.slice(timeLineIndex + 1);
+                const cueText = textLines.join(' ').replace(/\s+/g, ' ').trim();
+                const cueWords = parseWords(cueText);
+                if (!cueWords.length) return;
+
+                cues.push({ startMs, endMs, text: cueText, words: cueWords });
+            });
+
+            return cues.sort((a, b) => a.startMs - b.startMs);
+        }
+
+        function updateSrtStatus(message, isError = false) {
+            const label = document.getElementById('label-srt-status');
+            if (!label) return;
+            label.textContent = message;
+            label.className = `text-[10px] ${isError ? 'text-red-400' : 'text-gray-400'}`;
+        }
+
+        function clearSrtBurstTimers() {
+            srtBurstTimers.forEach(timerId => clearTimeout(timerId));
+            srtBurstTimers = [];
+        }
+
+        function restartSrtTimeline() {
+            state.srtPlaybackMs = 0;
+            state.srtCueIndex = 0;
+            clearSrtBurstTimers();
+        }
+
+        function applySrtCue(cue) {
+            if (!cue || !cue.words.length) return;
+
+            const textInput = document.getElementById('input-text-list');
+            if (textInput) textInput.value = cue.text;
+
+            const remaining = Math.max(state.maxCount - pBodies.length, 0);
+            if (remaining <= 0) return;
+
+            const timerId = setTimeout(() => {
+                if (state.isPaused || state.textSource !== 'srt') return;
+                spawnPill(undefined, undefined, cue.text, cue.startMs);
+            }, 0);
+            srtBurstTimers.push(timerId);
+        }
+
+        function updateSrtDrivenSpawning(deltaMs) {
+            if (state.textSource !== 'srt' || !state.srtCues.length) return;
+
+            state.srtPlaybackMs += deltaMs;
+
+            while (state.srtCueIndex < state.srtCues.length) {
+                const cue = state.srtCues[state.srtCueIndex];
+                if (cue.startMs > state.srtPlaybackMs) break;
+                applySrtCue(cue);
+                state.srtCueIndex++;
+            }
+        }
+
+        function applyBodyMaterialProperties() {
+            pBodies.forEach(body => {
+                body.restitution = state.bounce;
+                body.friction = state.friction;
+            });
+            Object.values(wallBodies).forEach(body => {
+                if (!body) return;
+                body.restitution = state.bounce;
+                body.friction = state.friction;
+            });
+        }
+
+        function applyPillGeometryToExistingBodies() {
+            pBodies.forEach(body => {
+                const data = body.customData;
+                if (!data) return;
+
+                const safeScale = Math.max(data.scaleProgress || 0.15, 0.01);
+                const oldCurrentW = Math.max(data.targetW * safeScale, 1);
+                const oldCurrentH = Math.max(data.targetH * safeScale, 1);
+                const newCurrentW = Math.max(state.pillW * safeScale, 1);
+                const newCurrentH = Math.max(state.pillH * safeScale, 1);
+
+                Matter.Body.scale(body, newCurrentW / oldCurrentW, newCurrentH / oldCurrentH);
+
+                data.targetW = state.pillW;
+                data.targetH = state.pillH;
+                data.chamferRadius = Math.min(state.pillRadius, state.pillH / 2);
+            });
+        }
+
+        function refreshExistingPillText() {
+            state.wordIndex = 0;
+            pBodies.forEach(body => {
+                if (body.customData) {
+                    body.customData.text = getNextWord();
+                }
+            });
+        }
+
+        function restartSpawningWithCurrentRate() {
+            if (!spawnTimer) return;
+            startBurstSpawning();
+        }
+
+        function spawnPill(overrideX, overrideY, overrideText, cueStartMs) {
+            if (pBodies.length >= state.maxCount && overrideX === undefined) return;
+
+            const { Bodies, World, Body } = Matter;
+
+            let x, y;
+            if (overrideX !== undefined && overrideY !== undefined) {
+                x = overrideX;
+                y = overrideY;
+            } else if (state.spawnMode === 'stagger-top') {
+                x = Math.random() * (state.compW - state.pillW) + state.pillW / 2;
+                y = state.pillH / 2 + 10;
+            } else if (state.spawnMode === 'center-burst') {
+                x = state.compW / 2 + (Math.random() * 20 - 10);
+                y = state.compH / 2 + (Math.random() * 20 - 10);
+            } else {
+                x = state.compW / 2 + (Math.random() * (state.compW * 0.6) - state.compW * 0.3);
+                y = state.compH - 200 + (Math.random() * 100 - 50);
+            }
+
+            const targetW = state.pillW;
+            const targetH = state.pillH;
+            const chamferRadius = Math.min(state.pillRadius, targetH / 2);
+
+            const startScale = 0.15;
+            const initialW = targetW * startScale;
+            const initialH = targetH * startScale;
+
+            const body = Bodies.rectangle(x, y, initialW, initialH, {
+                chamfer: { radius: chamferRadius * startScale },
+                restitution: state.bounce,
+                friction: state.friction,
+                frictionAir: 0.015,
+                density: 0.003
+            });
+
+            const angleRad = ((Math.random() * 2 - 1) * state.rotationRangeDeg * Math.PI) / 180;
+            Body.setAngle(body, angleRad);
+
+            if (state.spawnMode === 'popcorn') {
+                Body.setVelocity(body, {
+                    x: (Math.random() - 0.5) * 8,
+                    y: -(Math.random() * 12 + 6)
+                });
+            } else if (state.spawnMode === 'center-burst') {
+                const angle = Math.random() * Math.PI * 2;
+                const force = Math.random() * 5 + 3;
+                Body.setVelocity(body, {
+                    x: Math.cos(angle) * force,
+                    y: Math.sin(angle) * force
+                });
+            }
+
+            body.customData = {
+                text: overrideText === undefined ? getNextWord() : formatDisplayText(overrideText),
+                color: getRandomColor(),
+                targetW: targetW,
+                targetH: targetH,
+                currentW: initialW,
+                currentH: initialH,
+                scaleProgress: startScale,
+                chamferRadius: chamferRadius,
+                cueStartMs: Number.isFinite(cueStartMs) ? cueStartMs : null
+            };
+
+            pBodies.push(body);
+            World.add(world, body);
+
+            updateLayerCountDisplay();
+        }
+
+        function startBurstSpawning() {
+            clearSpawnTimer();
+            if (state.textSource === 'srt') return;
+            spawnTimer = setInterval(() => {
+                if (!state.isPaused && pBodies.length < state.maxCount) {
+                    spawnPill();
+                } else if (pBodies.length >= state.maxCount) {
+                    clearSpawnTimer();
+                }
+            }, state.spawnRateMs);
+        }
+
+        function clearSpawnTimer() {
+            if (spawnTimer) {
+                clearInterval(spawnTimer);
+                spawnTimer = null;
+            }
+        }
+
+        function resetSimulation() {
+            clearSpawnTimer();
+            clearSrtBurstTimers();
+            pBodies.forEach(b => Matter.World.remove(world, b));
+            pBodies = [];
+            state.wordIndex = 0;
+            restartSrtTimeline();
+            updateLayerCountDisplay();
+            if (state.textSource === 'srt') {
+                updateSrtStatus(`SRT mode active: ${state.srtCues.length} cues loaded.`);
+            } else {
+                startBurstSpawning();
+            }
+        }
+
+        function updateCompDimensions() {
+            if (!canvas) return;
+            canvas.width = state.compW;
+            canvas.height = state.compH;
+
+            const container = document.getElementById('viewport-container');
+            const availW = Math.max(container.clientWidth - 48, 200);
+            const availH = Math.max(container.clientHeight - 64, 200);
+
+            const scaleW = availW / state.compW;
+            const scaleH = availH / state.compH;
+            const fitScale = Math.min(scaleW, scaleH);
+
+            const wrapper = document.getElementById('canvas-wrapper');
+            const displayW = Math.round(state.compW * fitScale);
+            const displayH = Math.round(state.compH * fitScale);
+
+            wrapper.style.width = `${displayW}px`;
+            wrapper.style.height = `${displayH}px`;
+
+            document.getElementById('label-resolution').innerText = `${state.compW} x ${state.compH} PX`;
+            document.getElementById('label-zoom').innerText = `Scale: ${Math.round(fitScale * 100)}%`;
+
+            if (mouseConstraint && mouseConstraint.mouse) {
+                Matter.Mouse.setScale(mouseConstraint.mouse, {
+                    x: state.compW / displayW,
+                    y: state.compH / displayH
+                });
+            }
+
+            rebuildWalls();
+        }
+
+        function rebuildWalls() {
+            if (!world) return;
+            const { Bodies, World } = Matter;
+
+            Object.values(wallBodies).forEach(w => {
+                if (w) World.remove(world, w);
+            });
+            wallBodies = {};
+
+            const thickness = 1000;
+            const w = state.compW;
+            const h = state.compH;
+
+            if (state.walls.bottom) {
+                wallBodies.bottom = Bodies.rectangle(w / 2, h + thickness / 2, w * 3, thickness, { isStatic: true, restitution: state.bounce, friction: state.friction });
+            }
+            if (state.walls.top) {
+                wallBodies.top = Bodies.rectangle(w / 2, -thickness / 2, w * 3, thickness, { isStatic: true, restitution: state.bounce, friction: state.friction });
+            }
+            if (state.walls.left) {
+                wallBodies.left = Bodies.rectangle(-thickness / 2, h / 2, thickness, h * 3, { isStatic: true, restitution: state.bounce, friction: state.friction });
+            }
+            if (state.walls.right) {
+                wallBodies.right = Bodies.rectangle(w + thickness / 2, h / 2, thickness, h * 3, { isStatic: true, restitution: state.bounce, friction: state.friction });
+            }
+
+            Object.values(wallBodies).forEach(w => {
+                if (w) World.add(world, w);
+            });
+        }
+
+        function simLoop(timestamp) {
+            const delta = timestamp - lastFrameTime;
+            lastFrameTime = timestamp;
+            if (delta > 0) {
+                fpsCounter = Math.round(1000 / delta);
+                document.getElementById('stat-fps').innerText = fpsCounter;
+            }
+
+            if (!state.isPaused && engine) {
+                updateSrtDrivenSpawning(delta);
+
+                const subSteps = 3;
+                const timeStep = (1000 / 60) / subSteps;
+                for (let i = 0; i < subSteps; i++) {
+                    Matter.Engine.update(engine, timeStep);
+                }
+
+                pBodies.forEach(body => {
+                    const data = body.customData;
+                    if (!data) return;
+
+                    const maxSpeed = 10;
+                    const speed = Math.hypot(body.velocity.x, body.velocity.y);
+                    if (speed > maxSpeed) {
+                        Matter.Body.setVelocity(body, {
+                            x: (body.velocity.x / speed) * maxSpeed,
+                            y: (body.velocity.y / speed) * maxSpeed
+                        });
+                    }
+
+                    if (data.scaleProgress < 1.0) {
+                        const prevScale = data.scaleProgress;
+                        data.scaleProgress = Math.min(1.0, data.scaleProgress + state.scaleSpeed);
+                        const factor = data.scaleProgress / prevScale;
+                        Matter.Body.scale(body, factor, factor);
+                    }
+
+                    // Rotated Extent Clamping for Strict Boundary Containment
+                    const currentW = data.targetW * data.scaleProgress;
+                    const currentH = data.targetH * data.scaleProgress;
+                    const cos = Math.abs(Math.cos(body.angle));
+                    const sin = Math.abs(Math.sin(body.angle));
+                    const extentX = (currentW / 2) * cos + (currentH / 2) * sin;
+                    const extentY = (currentW / 2) * sin + (currentH / 2) * cos;
+
+                    let px = body.position.x;
+                    let py = body.position.y;
+                    let vx = body.velocity.x;
+                    let vy = body.velocity.y;
+                    let altered = false;
+
+                    if (state.walls.left && px - extentX < 0) {
+                        px = extentX;
+                        vx = Math.abs(vx) * state.bounce;
+                        altered = true;
+                    }
+                    if (state.walls.right && px + extentX > state.compW) {
+                        px = state.compW - extentX;
+                        vx = -Math.abs(vx) * state.bounce;
+                        altered = true;
+                    }
+                    if (state.walls.top && py - extentY < 0) {
+                        py = extentY;
+                        vy = Math.abs(vy) * state.bounce;
+                        altered = true;
+                    }
+                    if (state.walls.bottom && py + extentY > state.compH) {
+                        py = state.compH - extentY;
+                        vy = -Math.abs(vy) * state.bounce;
+                        altered = true;
+                    }
+
+                    if (altered) {
+                        Matter.Body.setPosition(body, { x: px, y: py });
+                        Matter.Body.setVelocity(body, { x: vx, y: vy });
+                    }
+                });
+            }
+
+            renderScene();
+            requestAnimationFrame(simLoop);
+        }
+
+        function renderScene() {
+            if (!ctx) return;
+            ctx.fillStyle = state.bgColor;
+            ctx.fillRect(0, 0, state.compW, state.compH);
+
+            pBodies.forEach(body => {
+                const data = body.customData;
+                if (!data) return;
+
+                const pos = body.position;
+                const angle = body.angle;
+                const currentW = data.targetW * data.scaleProgress;
+                const currentH = data.targetH * data.scaleProgress;
+                const radius = Math.min(data.chamferRadius * data.scaleProgress, currentH / 2);
+
+                ctx.save();
+                ctx.translate(pos.x, pos.y);
+                ctx.rotate(angle);
+
+                if (state.shadows) {
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+                    ctx.shadowBlur = 15;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 8;
+                } else {
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                }
+
+                ctx.beginPath();
+                drawRoundedRect(ctx, -currentW / 2, -currentH / 2, currentW, currentH, radius);
+                ctx.fillStyle = data.color;
+                ctx.fill();
+
+                ctx.shadowColor = 'transparent';
+
+                // Render Pill Text
+                if (data.text) {
+                    const fontSize = currentH * state.fontScale;
+                    ctx.font = `900 ${fontSize}px "${state.fontFamily}", sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = getSmartTextColor(data.color);
+
+                    if (isArabicText(data.text)) {
+                        ctx.direction = 'rtl';
+                    } else {
+                        ctx.direction = 'ltr';
+                    }
+
+                    ctx.fillText(data.text, 0, fontSize * 0.08);
+                }
+
+                ctx.restore();
+            });
+        }
+
+        function drawRoundedRect(ctx, x, y, width, height, radius) {
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+
+        function updateLayerCountDisplay() {
+            document.getElementById('stat-layer-count').innerText = pBodies.length;
+            const countNum = document.getElementById('num-max-count');
+            if (countNum) countNum.value = state.maxCount;
+        }
+
+        function setupUIEventListeners() {
+            // Tab Button Switching
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                    btn.classList.add('active');
+                    const tabId = btn.getAttribute('data-tab');
+                    const targetTab = document.getElementById(tabId);
+                    if (targetTab) targetTab.classList.remove('hidden');
+                });
+            });
+
+            // Header Playback Controls
+            document.getElementById('btn-burst').addEventListener('click', () => startBurstSpawning());
+            document.getElementById('btn-burst').addEventListener('click', () => {
+                if (state.textSource !== 'srt') return;
+                restartSrtTimeline();
+                updateSrtStatus('SRT timeline restarted from the beginning.');
+            });
+
+            document.getElementById('btn-play-pause').addEventListener('click', () => {
+                state.isPaused = !state.isPaused;
+                document.getElementById('label-play-pause').innerText = state.isPaused ? 'Resume' : 'Pause';
+                document.getElementById('icon-play-pause').className = state.isPaused ? 'fa-solid fa-play' : 'fa-solid fa-pause';
+            });
+
+            document.getElementById('btn-reset').addEventListener('click', () => resetSimulation());
+
+            // Text Inputs
+            const textInput = document.getElementById('input-text-list');
+            textInput.value = state.words.join(' ');
+            textInput.addEventListener('input', (e) => {
+                if (state.textSource !== 'manual') {
+                    state.textSource = 'manual';
+                    updateSrtStatus('Manual words mode is active.');
+                }
+                state.words = parseWords(e.target.value);
+                state.wordIndex = 0;
+                refreshExistingPillText();
+                startBurstSpawning();
+            });
+
+            const srtInput = document.getElementById('input-srt-file');
+            const clearSrtBtn = document.getElementById('btn-clear-srt');
+
+            srtInput.addEventListener('change', async (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+
+                try {
+                    const srtText = await file.text();
+                    const cues = parseSrtCues(srtText);
+                    if (!cues.length) {
+                        updateSrtStatus('SRT parsing failed: no valid cues found.', true);
+                        return;
+                    }
+
+                    state.srtCues = cues;
+                    state.textSource = 'srt';
+                    state.words = cues[0].words.slice();
+                    state.wordIndex = 0;
+                    textInput.value = cues[0].text;
+
+                    clearSrtBtn.classList.remove('hidden');
+                    updateSrtStatus(`SRT loaded: ${file.name} (${cues.length} cues).`);
+                    resetSimulation();
+                } catch (err) {
+                    updateSrtStatus('Could not read this SRT file.', true);
+                }
+            });
+
+            clearSrtBtn.addEventListener('click', () => {
+                state.textSource = 'manual';
+                state.srtCues = [];
+                state.srtCueIndex = 0;
+                state.srtPlaybackMs = 0;
+                srtInput.value = '';
+                clearSrtBtn.classList.add('hidden');
+                updateSrtStatus('Manual words mode is active.');
+                resetSimulation();
+            });
+
+            document.getElementById('select-word-order').addEventListener('change', (e) => {
+                state.wordOrder = e.target.value;
+                state.wordIndex = 0;
+                refreshExistingPillText();
+            });
+
+            document.getElementById('select-font').addEventListener('change', (e) => {
+                state.fontFamily = e.target.value;
+            });
+
+            document.getElementById('select-text-case').addEventListener('change', (e) => {
+                state.textCase = e.target.value;
+                refreshExistingPillText();
+            });
+
+            // Slider <-> Custom Number Input Sync Helper
+            const bindControl = (sliderId, numId, prop, isFloat = false) => {
+                const slider = document.getElementById(sliderId);
+                const numInput = document.getElementById(numId);
+                if (!slider || !numInput) return;
+
+                slider.addEventListener('input', (e) => {
+                    const val = isFloat ? parseFloat(e.target.value) : parseInt(e.target.value);
+                    state[prop] = val;
+                    numInput.value = val;
+                    if (prop === 'gravityY' && world) world.gravity.y = val;
+                    if (prop === 'maxCount') updateLayerCountDisplay();
+                    if (prop === 'pillW' || prop === 'pillH' || prop === 'pillRadius') applyPillGeometryToExistingBodies();
+                    if (prop === 'bounce' || prop === 'friction') applyBodyMaterialProperties();
+                    if (prop === 'spawnRateMs') restartSpawningWithCurrentRate();
+                });
+
+                numInput.addEventListener('input', (e) => {
+                    const val = isFloat ? parseFloat(e.target.value) : parseInt(e.target.value);
+                    if (isNaN(val)) return;
+                    state[prop] = val;
+                    if (val < parseFloat(slider.min)) slider.min = val;
+                    if (val > parseFloat(slider.max)) slider.max = val;
+                    slider.value = val;
+                    if (prop === 'gravityY' && world) world.gravity.y = val;
+                    if (prop === 'maxCount') updateLayerCountDisplay();
+                    if (prop === 'pillW' || prop === 'pillH' || prop === 'pillRadius') applyPillGeometryToExistingBodies();
+                    if (prop === 'bounce' || prop === 'friction') applyBodyMaterialProperties();
+                    if (prop === 'spawnRateMs') restartSpawningWithCurrentRate();
+                });
+            };
+
+            bindControl('slider-pill-w', 'num-pill-w', 'pillW');
+            bindControl('slider-pill-h', 'num-pill-h', 'pillH');
+            bindControl('slider-pill-radius', 'num-pill-radius', 'pillRadius');
+            bindControl('slider-font-scale', 'num-font-scale', 'fontScale', true);
+            bindControl('slider-max-count', 'num-max-count', 'maxCount');
+            bindControl('slider-spawn-rate', 'num-spawn-rate', 'spawnRateMs');
+            bindControl('slider-scale-speed', 'num-scale-speed', 'scaleSpeed', true);
+            bindControl('slider-gravity-y', 'num-gravity-y', 'gravityY', true);
+            bindControl('slider-bounce', 'num-bounce', 'bounce', true);
+            bindControl('slider-friction', 'num-friction', 'friction', true);
+            bindControl('slider-rotation-range', 'num-rotation-range', 'rotationRangeDeg');
+
+            document.getElementById('select-spawn-mode').addEventListener('change', (e) => {
+                state.spawnMode = e.target.value;
+                resetSimulation();
+            });
+
+            // Ratio Presets
+            document.querySelectorAll('.btn-preset-ratio').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const w = parseInt(btn.getAttribute('data-w'));
+                    const h = parseInt(btn.getAttribute('data-h'));
+                    state.compW = w;
+                    state.compH = h;
+                    document.getElementById('input-comp-w').value = w;
+                    document.getElementById('input-comp-h').value = h;
+                    updateCompDimensions();
+                });
+            });
+
+            document.getElementById('input-comp-w').addEventListener('input', (e) => {
+                state.compW = parseInt(e.target.value) || 1080;
+                updateCompDimensions();
+            });
+            document.getElementById('input-comp-h').addEventListener('input', (e) => {
+                state.compH = parseInt(e.target.value) || 1920;
+                updateCompDimensions();
+            });
+
+            // Colors
+            const pickerBg = document.getElementById('picker-bg-color');
+            const textBg = document.getElementById('text-bg-color');
+            pickerBg.addEventListener('input', (e) => {
+                state.bgColor = e.target.value;
+                textBg.value = e.target.value.toUpperCase();
+            });
+            textBg.addEventListener('input', (e) => {
+                state.bgColor = e.target.value;
+                pickerBg.value = e.target.value;
+            });
+
+            const pickerText = document.getElementById('picker-text-color');
+            const textText = document.getElementById('text-text-color');
+            pickerText.addEventListener('input', (e) => {
+                state.textColor = e.target.value;
+                textText.value = e.target.value.toUpperCase();
+            });
+            textText.addEventListener('input', (e) => {
+                state.textColor = e.target.value;
+                pickerText.value = e.target.value;
+            });
+
+            document.getElementById('chk-auto-contrast').addEventListener('change', (e) => {
+                state.autoContrast = e.target.checked;
+            });
+            document.getElementById('chk-shadow').addEventListener('change', (e) => {
+                state.shadows = e.target.checked;
+            });
+
+            // Walls
+            ['bottom', 'top', 'left', 'right'].forEach(wall => {
+                document.getElementById(`chk-wall-${wall}`).addEventListener('change', (e) => {
+                    state.walls[wall] = e.target.checked;
+                    rebuildWalls();
+                });
+            });
+
+            // Palettes
+            document.querySelectorAll('.btn-palette').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const key = btn.getAttribute('data-palette');
+                    if (PALETTES[key]) {
+                        state.palette = PALETTES[key];
+                        pBodies.forEach(b => {
+                            if (b.customData) b.customData.color = getRandomColor();
+                        });
+                    }
+                });
+            });
+
+            // Export Snapshot
+            document.getElementById('btn-export-png').addEventListener('click', () => {
+                const link = document.createElement('a');
+                link.download = `popcorn-studio-${Date.now()}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+
+            // Video Recorder
+            document.getElementById('btn-record').addEventListener('click', () => {
+                if (!state.isRecording) {
+                    startRecording();
+                } else {
+                    stopRecording();
+                }
+            });
+
+            window.addEventListener('resize', () => updateCompDimensions());
+        }
+
+        function initPhysicsEngine() {
+            canvas = document.getElementById('sim-canvas');
+            ctx = canvas.getContext('2d');
+
+            const { Engine, World, Mouse, MouseConstraint } = Matter;
+            engine = Engine.create({
+                gravity: { x: 0, y: state.gravityY, scale: 0.001 }
+            });
+            world = engine.world;
+
+            const mouse = Mouse.create(document.getElementById('canvas-wrapper'));
+            mouseConstraint = MouseConstraint.create(engine, {
+                mouse: mouse,
+                constraint: {
+                    stiffness: 0.2,
+                    render: { visible: false }
+                }
+            });
+            World.add(world, mouseConstraint);
+
+            updateCompDimensions();
+            resetSimulation();
+            requestAnimationFrame(simLoop);
+        }
+
+        function startRecording() {
+            resetSimulation();
+            renderScene();
+
+            recordedChunks = [];
+            const stream = canvas.captureStream(60);
+            try {
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+            } catch (e) {
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            }
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `popcorn-physics-${Date.now()}.webm`;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            mediaRecorder.start();
+            state.isRecording = true;
+
+            const recordBtn = document.getElementById('btn-record');
+            recordBtn.classList.add('recording-pulse', 'bg-red-700');
+            document.getElementById('label-record').innerText = 'Stop Recording';
+            document.getElementById('icon-record').className = 'fa-solid fa-square text-[10px]';
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && state.isRecording) {
+                mediaRecorder.stop();
+                state.isRecording = false;
+
+                const recordBtn = document.getElementById('btn-record');
+                recordBtn.classList.remove('recording-pulse', 'bg-red-700');
+                document.getElementById('label-record').innerText = 'Record Video';
+                document.getElementById('icon-record').className = 'fa-solid fa-circle text-[10px]';
+            }
+        }
+
+        // On Page Load Initialization
+        window.onload = function() {
+            setupUIEventListeners();
+            initPhysicsEngine();
+        };
+    </script>
+</body>
+</html>
